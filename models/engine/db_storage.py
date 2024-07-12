@@ -36,14 +36,11 @@ class DBStorage:
 
 
         self.__engine = create_engine(uri, pool_pre_ping=True)
-        Session = sessionmaker(bind=engine)
-        DBStorage.__session = Session()
-
+        
         # delete the test.* if env is "test"
+
         if env == "test":
             Base.metadata.drop_all(engine)
-
-        # Base.metadata.create_all(engine)
 
 
     def all(self, cls=None):
@@ -58,31 +55,20 @@ class DBStorage:
                 "Place",
                 "Review"
         ]
-        """
-        classes = {
-                "User": User,
-                "BaseModel": BaseModel,
-                "City": City,
-                "Amenity": Amenity,
-                "State": State,
-                "Place": Place,
-                "Review": Review
-        }
-        """
 
         dictionary = {}
         if cls is None:
             
             # query the database tables
             for name in table_names:
-                result = DBStorage.__session.query(name).all()
+                result = self.__session.query(name).all()
 
                 # loop through the objects and store in our local dict
                 for obj in result:
                     key = obj.to_dict()['__class__'] + "." + obj.id
                     dictionary[key] = obj
         else:
-            result = DBStorage.__session.query(str(cls)).all()
+            result = self.__session.query(str(cls)).all()
 
             for obj in result:
                 key = obj.to_dict()['__class__'] + '.' + obj.id
@@ -92,24 +78,24 @@ class DBStorage:
     def new(self, obj):
         """Adds a new object to the current database session"""
 
-        DBStorage.__session.add(obj)
+        self.__session.add(obj)
 
 
     def save(self):
         """Commits all changes of the current database session"""
-        DBStorage.__session.commit()
+        self.__session.commit()
 
 
     def delete(self, obj=None):
         """Deletes from a current database session"""
         if obj:
-            DBStorage.__session.delete(obj)
-            # DBStorage.__session.commit()
+            self.__session.delete(obj)
+            # self.__session.commit()
 
     def reload(self):
         """Creates all tables in the database"""
 
-
-
-        pass
+        Base.metadata.create_all(self.__engine)
+        Session = sessionmaker(bind=self.__engine, expire_on_commit=False)
+        self.__session = Session()
 
