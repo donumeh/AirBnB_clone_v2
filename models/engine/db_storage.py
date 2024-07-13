@@ -7,6 +7,8 @@ from models.user import User
 from models.state import State
 from models.city import City
 from models.amenity import Amenity
+from models.place import Place
+from models.review import Review
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -25,14 +27,14 @@ class DBStorage:
 
         # get the system environmen variables
 
-        usr = os.getenv(HBNB_MYSQL_USER)
-        passwd = quote_plus(os.getenv(HBNB_MYSQL_PWD))
-        host = os.getenv(HBNB_MYSQL_HOST)
-        db = os.getenv(HBNB_MYSQL_DB)
-        env = os.getenv(HBNB_ENV)
+        usr = os.getenv("HBNB_MYSQL_USER")
+        passwd = quote_plus(os.getenv("HBNB_MYSQL_PWD"))
+        host = os.getenv("HBNB_MYSQL_HOST")
+        db = os.getenv("HBNB_MYSQL_DB")
+        env = os.getenv("HBNB_ENV")
 
         # connect to the database engine
-        uri = f"mysql+mysqldb//:{usr}@{host}:3306/{db}"
+        uri = f"mysql+mysqldb://{usr}:{passwd}@{host}:3306/{db}"
 
 
         self.__engine = create_engine(uri, pool_pre_ping=True)
@@ -50,29 +52,40 @@ class DBStorage:
         table_names = [
                 "User",
                 "State",
-                "city",
+                "City",
                 "Amenity",
                 "Place",
                 "Review"
         ]
+
+        classes = {
+                "User": User,
+                "State": State,
+                "City": City,
+                "Amenity": Amenity,
+                "Place": Place,
+                "Review": Review
+        }
 
         dictionary = {}
         if cls is None:
             
             # query the database tables
             for name in table_names:
-                result = self.__session.query(name).all()
+                result = self.__session.query(classes[name]).all()
 
                 # loop through the objects and store in our local dict
                 for obj in result:
                     key = obj.to_dict()['__class__'] + "." + obj.id
                     dictionary[key] = obj
         else:
-            result = self.__session.query(str(cls)).all()
+            result = self.__session.query(classes[cls]).all()
 
             for obj in result:
                 key = obj.to_dict()['__class__'] + '.' + obj.id
                 dictionary[key] = obj
+
+        return dictionary
 
 
     def new(self, obj):

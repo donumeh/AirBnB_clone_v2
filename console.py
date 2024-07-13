@@ -12,6 +12,7 @@ from models.city import City
 from datetime import datetime
 from models.amenity import Amenity
 from models.review import Review
+import os
 
 
 class HBNBCommand(cmd.Cmd):
@@ -171,9 +172,10 @@ class HBNBCommand(cmd.Cmd):
 
         """
         class_int = new_instance(**new_attr)
-        storage.save()
+        # storage.save()
         print(class_int.id)
         # storage.save()
+        class_int.save()
 
         # Former comment begins here
         """
@@ -263,16 +265,29 @@ class HBNBCommand(cmd.Cmd):
         """Shows all objects, or all objects of a class"""
         print_list = []
 
+
         if args:
             args = args.split(" ")[0]  # remove possible trailing args
             if args not in HBNBCommand.classes:
                 print("** class doesn't exist **")
                 return
-            for k, v in storage._FileStorage__objects.items():
+
+            if os.getenv("HBNB_TYPE_STORAGE") == "db":
+                result = storage.all(args)
+            else:
+                result = storage._FileStorage__objects
+
+            for k, v in result.items():
                 if k.split(".")[0] == args:
                     print_list.append(str(v))
         else:
-            for k, v in storage._FileStorage__objects.items():
+
+            if os.getenv("HBNB_TYPE_STORAGE") == "db":
+                result = storage.all()
+            else:
+                result = storage._FileStorage__objects
+            
+            for k, v in result.items():
                 print_list.append(str(v))
 
         print(print_list)
