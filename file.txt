@@ -1,0 +1,1066 @@
+# These individuals contributed to the hbnb project in this repository 
+
+Donald Umeh <donumeh54@gmail.com>
+Gabriel <babatise002@gmail.com>
+#!/usr/bin/python3
+""" Console Module """
+import cmd
+import sys
+import uuid
+from models.base_model import BaseModel
+from models.__init__ import storage
+from models.user import User
+from models.place import Place
+from models.state import State
+from models.city import City
+from datetime import datetime
+from models.amenity import Amenity
+from models.review import Review
+import os
+
+
+class HBNBCommand(cmd.Cmd):
+    """Contains the functionality for the HBNB console"""
+
+    # determines prompt for interactive/non-interactive modes
+    prompt = "(hbnb) " if sys.__stdin__.isatty() else ""
+
+    classes = {
+        "BaseModel": BaseModel,
+        "User": User,
+        "Place": Place,
+        "State": State,
+        "City": City,
+        "Amenity": Amenity,
+        "Review": Review,
+    }
+    dot_cmds = ["all", "count", "show", "destroy", "update"]
+    types = {
+        "number_rooms": int,
+        "number_bathrooms": int,
+        "max_guest": int,
+        "price_by_night": int,
+        "latitude": float,
+        "longitude": float,
+    }
+
+    def preloop(self):
+        """Prints if isatty is false"""
+        if not sys.__stdin__.isatty():
+            print("(hbnb)")
+
+    def precmd(self, line):
+        """Reformat command line for advanced command syntax.
+
+        Usage: <class name>.<command>([<id> [<*args> or <**kwargs>]])
+        (Brackets denote optional fields in usage example.)
+        """
+        _cmd = _cls = _id = _args = ""  # initialize line elements
+
+        # scan for general formating - i.e '.', '(', ')'
+        if not ("." in line and "(" in line and ")" in line):
+            return line
+
+        try:  # parse line left to right
+            pline = line[:]  # parsed line
+
+            # isolate <class name>
+            _cls = pline[: pline.find(".")]
+
+            # isolate and validate <command>
+            _cmd = pline[pline.find(".") + 1 : pline.find("(")]
+            if _cmd not in HBNBCommand.dot_cmds:
+                raise Exception
+
+            # if parantheses contain arguments, parse them
+            pline = pline[pline.find("(") + 1 : pline.find(")")]
+            if pline:
+                # partition args: (<id>, [<delim>], [<*args>])
+                pline = pline.partition(", ")  # pline convert to tuple
+
+                # isolate _id, stripping quotes
+                _id = pline[0].replace('"', "")
+                # possible bug here:
+                # empty quotes register as empty _id when replaced
+
+                # if arguments exist beyond _id
+                pline = pline[2].strip()  # pline is now str
+                if pline:
+                    # check for *args or **kwargs
+                    if (
+                        pline[0] == "{"
+                        and pline[-1] == "}"
+                        and type(eval(pline)) == dict
+                    ):
+                        _args = pline
+                    else:
+                        _args = pline.replace(",", "")
+                        # _args = _args.replace('\"', '')
+            line = " ".join([_cmd, _cls, _id, _args])
+
+        except Exception as mess:
+            pass
+        finally:
+            return line
+
+    def postcmd(self, stop, line):
+        """Prints if isatty is false"""
+        if not sys.__stdin__.isatty():
+            print("(hbnb) ", end="")
+        return stop
+
+    def do_quit(self, command):
+        """Method to exit the HBNB console"""
+        exit()
+
+    def help_quit(self):
+        """Prints the help documentation for quit"""
+        print("Exits the program with formatting\n")
+
+    def do_EOF(self, arg):
+        """Handles EOF to exit program"""
+        print()
+        exit()
+
+    def help_EOF(self):
+        """Prints the help documentation for EOF"""
+        print("Exits the program without formatting\n")
+
+    def emptyline(self):
+        """Overrides the emptyline method of CMD"""
+        pass
+
+    def do_create(self, args):
+        """Create an object of any class"""
+
+        if not args:
+            print("** class name missing **")
+            return
+
+        args_split = args.split(" ")
+
+        if args_split[0] not in HBNBCommand.classes:
+            print("** class doesn't exists **")
+            return
+
+        new_instance = HBNBCommand.classes[args_split[0]]
+
+        new_attr = {}
+        for param in args_split[1:]:
+            p_property, p_value = param.split("=")
+
+            if p_value[0] == '"':
+                p_value = p_value[1:-1]
+
+                p_value = p_value.replace("_", " ")
+                p_value = p_value.replace('"', '\\"')
+
+            elif "." in p_value:
+                try:
+                    p_value = float(p_value)
+                except:
+                    print("Float could not be converted")
+            else:
+                try:
+                    p_value = int(p_value)
+                except:
+                    print("Int could not be converted")
+            new_attr[p_property] = p_value
+
+        """
+        if new_attr:
+            new_attr['updated_at'] = datetime.isoformat(datetime.now())
+            new_attr['created_at'] = datetime.isoformat(datetime.now())
+            new_attr['__class__'] = new_instance.__class__.__name__
+            new_attr['id'] = uuid.uuid4()
+
+        """
+        class_int = new_instance(**new_attr)
+        # storage.save()
+        print(class_int.id)
+        # storage.save()
+        class_int.save()
+
+        # Former comment begins here
+        """
+            return
+        elif args not in HBNBCommand.classes:
+            print("** class doesn't exist **")
+            return
+
+        new_instance = HBNBCommand.classes[args]()
+        storage.save()
+        print(new_instance.id)
+        storage.save()
+        """
+
+    def help_create(self):
+        """Help information for the create method"""
+        print("Creates a class of any type")
+        print("[Usage]: create <className>\n [<param 1> <param 2. <param 3> ...")
+
+    def do_show(self, args):
+        """Method to show an individual object"""
+        new = args.partition(" ")
+        c_name = new[0]
+        c_id = new[2]
+
+        # guard against trailing args
+        if c_id and " " in c_id:
+            c_id = c_id.partition(" ")[0]
+
+        if not c_name:
+            print("** class name missing **")
+            return
+
+        if c_name not in HBNBCommand.classes:
+            print("** class doesn't exist **")
+            return
+
+        if not c_id:
+            print("** instance id missing **")
+            return
+
+        key = c_name + "." + c_id
+        try:
+            print(storage._FileStorage__objects[key])
+        except KeyError:
+            print("** no instance found **")
+
+    def help_show(self):
+        """Help information for the show command"""
+        print("Shows an individual instance of a class")
+        print("[Usage]: show <className> <objectId>\n")
+
+    def do_destroy(self, args):
+        """Destroys a specified object"""
+        new = args.partition(" ")
+        c_name = new[0]
+        c_id = new[2]
+        if c_id and " " in c_id:
+            c_id = c_id.partition(" ")[0]
+
+        if not c_name:
+            print("** class name missing **")
+            return
+
+        if c_name not in HBNBCommand.classes:
+            print("** class doesn't exist **")
+            return
+
+        if not c_id:
+            print("** instance id missing **")
+            return
+
+        key = c_name + "." + c_id
+
+        try:
+            del storage.all()[key]
+            storage.save()
+        except KeyError:
+            print("** no instance found **")
+
+    def help_destroy(self):
+        """Help information for the destroy command"""
+        print("Destroys an individual instance of a class")
+        print("[Usage]: destroy <className> <objectId>\n")
+
+    def do_all(self, args):
+        """Shows all objects, or all objects of a class"""
+        print_list = []
+
+
+        if args:
+            args = args.split(" ")[0]  # remove possible trailing args
+            if args not in HBNBCommand.classes:
+                print("** class doesn't exist **")
+                return
+
+            if os.getenv("HBNB_TYPE_STORAGE") == "db":
+                result = storage.all(args)
+            else:
+                result = storage._FileStorage__objects
+
+            for k, v in result.items():
+                if k.split(".")[0] == args:
+                    print_list.append(str(v))
+        else:
+
+            if os.getenv("HBNB_TYPE_STORAGE") == "db":
+                result = storage.all()
+            else:
+                result = storage._FileStorage__objects
+            
+            for k, v in result.items():
+                print_list.append(str(v))
+
+        print(print_list)
+
+    def help_all(self):
+        """Help information for the all command"""
+        print("Shows all objects, or all of a class")
+        print("[Usage]: all <className>\n")
+
+    def do_count(self, args):
+        """Count current number of class instances"""
+        count = 0
+        for k, v in storage._FileStorage__objects.items():
+            if args == k.split(".")[0]:
+                count += 1
+        print(count)
+
+    def help_count(self):
+        """ """
+        print("Usage: count <class_name>")
+
+    def do_update(self, args):
+        """Updates a certain object with new info"""
+        c_name = c_id = att_name = att_val = kwargs = ""
+
+        # isolate cls from id/args, ex: (<cls>, delim, <id/args>)
+        args = args.partition(" ")
+        if args[0]:
+            c_name = args[0]
+        else:  # class name not present
+            print("** class name missing **")
+            return
+        if c_name not in HBNBCommand.classes:  # class name invalid
+            print("** class doesn't exist **")
+            return
+
+        # isolate id from args
+        args = args[2].partition(" ")
+        if args[0]:
+            c_id = args[0]
+        else:  # id not present
+            print("** instance id missing **")
+            return
+
+        # generate key from class and id
+        key = c_name + "." + c_id
+
+        # determine if key is present
+        if key not in storage.all():
+            print("** no instance found **")
+            return
+
+        # first determine if kwargs or args
+        if "{" in args[2] and "}" in args[2] and type(eval(args[2])) == dict:
+            kwargs = eval(args[2])
+            args = []  # reformat kwargs into list, ex: [<name>, <value>, ...]
+            for k, v in kwargs.items():
+                args.append(k)
+                args.append(v)
+        else:  # isolate args
+            args = args[2]
+            if args and args[0] == '"':  # check for quoted arg
+                second_quote = args.find('"', 1)
+                att_name = args[1:second_quote]
+                args = args[second_quote + 1 :]
+
+            args = args.partition(" ")
+
+            # if att_name was not quoted arg
+            if not att_name and args[0] != " ":
+                att_name = args[0]
+            # check for quoted val arg
+            if args[2] and args[2][0] == '"':
+                att_val = args[2][1 : args[2].find('"', 1)]
+
+            # if att_val was not quoted arg
+            if not att_val and args[2]:
+                att_val = args[2].partition(" ")[0]
+
+            args = [att_name, att_val]
+
+        # retrieve dictionary of current objects
+        new_dict = storage.all()[key]
+
+        # iterate through attr names and values
+        for i, att_name in enumerate(args):
+            # block only runs on even iterations
+            if i % 2 == 0:
+                att_val = args[i + 1]  # following item is value
+                if not att_name:  # check for att_name
+                    print("** attribute name missing **")
+                    return
+                if not att_val:  # check for att_value
+                    print("** value missing **")
+                    return
+                # type cast as necessary
+                if att_name in HBNBCommand.types:
+                    att_val = HBNBCommand.types[att_name](att_val)
+
+                # update dictionary with name, value pair
+                new_dict.__dict__.update({att_name: att_val})
+
+        new_dict.save()  # save updates to file
+
+    def help_update(self):
+        """Help information for the update class"""
+        print("Updates an object with new information")
+        print("Usage: update <className> <id> <attName> <attVal>\n")
+
+
+if __name__ == "__main__":
+    HBNBCommand().cmdloop()
+{}
+#!/usr/bin/python3
+""" Test link Many-To-Many Place <> Amenity
+"""
+from models import *
+from models.state import State
+from models.city import City
+from models.user import User
+from models.place import Place
+from models.amenity import Amenity
+
+
+# creation of a State
+state = State(name="California")
+state.save()
+
+# creation of a City
+city = City(state_id=state.id, name="San Francisco")
+city.save()
+
+# creation of a User
+user = User(email="john@snow.com", password="johnpwd")
+user.save()
+
+# creation of 2 Places
+place_1 = Place(user_id=user.id, city_id=city.id, name="House 1")
+place_1.save()
+place_2 = Place(user_id=user.id, city_id=city.id, name="House 2")
+place_2.save()
+
+# creation of 3 various Amenity
+amenity_1 = Amenity(name="Wifi")
+amenity_1.save()
+amenity_2 = Amenity(name="Cable")
+amenity_2.save()
+amenity_3 = Amenity(name="Oven")
+amenity_3.save()
+
+# link place_1 with 2 amenities
+place_1.amenities.append(amenity_1)
+place_1.amenities.append(amenity_2)
+
+# link place_2 with 3 amenities
+place_2.amenities.append(amenity_1)
+place_2.amenities.append(amenity_2)
+place_2.amenities.append(amenity_3)
+
+storage.save()
+
+print("OK")
+
+<center> <h1>HBNB - The Console</h1> </center>
+
+This repository contains the initial stage of a student project to build a clone of the AirBnB website. This stage implements a backend interface, or console, to manage program data. Console commands allow the user to create, update, and destroy objects, as well as manage file storage. Using a system of JSON serialization/deserialization, storage is persistent between sessions.
+
+---
+
+<center><h3>Repository Contents by Project Task</h3> </center>
+
+| Tasks | Files | Description |
+| ----- | ----- | ------ |
+| 0: Authors/README File | [AUTHORS](https://github.com/justinmajetich/AirBnB_clone/blob/dev/AUTHORS) | Project authors |
+| 1: Pep8 | N/A | All code is pep8 compliant|
+| 2: Unit Testing | [/tests](https://github.com/justinmajetich/AirBnB_clone/tree/dev/tests) | All class-defining modules are unittested |
+| 3. Make BaseModel | [/models/base_model.py](https://github.com/justinmajetich/AirBnB_clone/blob/dev/models/base_model.py) | Defines a parent class to be inherited by all model classes|
+| 4. Update BaseModel w/ kwargs | [/models/base_model.py](https://github.com/justinmajetich/AirBnB_clone/blob/dev/models/base_model.py) | Add functionality to recreate an instance of a class from a dictionary representation|
+| 5. Create FileStorage class | [/models/engine/file_storage.py](https://github.com/justinmajetich/AirBnB_clone/blob/dev/models/engine/file_storage.py) [/models/_ _init_ _.py](https://github.com/justinmajetich/AirBnB_clone/blob/dev/models/__init__.py) [/models/base_model.py](https://github.com/justinmajetich/AirBnB_clone/blob/dev/models/base_model.py) | Defines a class to manage persistent file storage system|
+| 6. Console 0.0.1 | [console.py](https://github.com/justinmajetich/AirBnB_clone/blob/dev/console.py) | Add basic functionality to console program, allowing it to quit, handle empty lines and ^D |
+| 7. Console 0.1 | [console.py](https://github.com/justinmajetich/AirBnB_clone/blob/dev/console.py) | Update the console with methods allowing the user to create, destroy, show, and update stored data |
+| 8. Create User class | [console.py](https://github.com/justinmajetich/AirBnB_clone/blob/dev/console.py) [/models/engine/file_storage.py](https://github.com/justinmajetich/AirBnB_clone/blob/dev/models/engine/file_storage.py) [/models/user.py](https://github.com/justinmajetich/AirBnB_clone/blob/dev/models/user.py) | Dynamically implements a user class |
+| 9. More Classes | [/models/user.py](https://github.com/justinmajetich/AirBnB_clone/blob/dev/models/user.py) [/models/place.py](https://github.com/justinmajetich/AirBnB_clone/blob/dev/models/place.py) [/models/city.py](https://github.com/justinmajetich/AirBnB_clone/blob/dev/models/city.py) [/models/amenity.py](https://github.com/justinmajetich/AirBnB_clone/blob/dev/models/amenity.py) [/models/state.py](https://github.com/justinmajetich/AirBnB_clone/blob/dev/models/state.py) [/models/review.py](https://github.com/justinmajetich/AirBnB_clone/blob/dev/models/review.py) | Dynamically implements more classes |
+| 10. Console 1.0 | [console.py](https://github.com/justinmajetich/AirBnB_clone/blob/dev/console.py) [/models/engine/file_storage.py](https://github.com/justinmajetich/AirBnB_clone/blob/dev/models/engine/file_storage.py) | Update the console and file storage system to work dynamically with all  classes update file storage |
+<br>
+<br>
+<center> <h2>General Use</h2> </center>
+
+1. First clone this repository.
+
+3. Once the repository is cloned locate the "console.py" file and run it as follows:
+```
+/AirBnB_clone$ ./console.py
+```
+4. When this command is run the following prompt should appear:
+```
+(hbnb)
+```
+5. This prompt designates you are in the "HBnB" console. There are a variety of commands available within the console program.
+
+##### Commands
+    * create - Creates an instance based on given class
+
+    * destroy - Destroys an object based on class and UUID
+
+    * show - Shows an object based on class and UUID
+
+    * all - Shows all objects the program has access to, or all objects of a given class
+
+    * update - Updates existing attributes an object based on class name and UUID
+
+    * quit - Exits the program (EOF will as well)
+
+
+##### Alternative Syntax
+Users are able to issue a number of console command using an alternative syntax:
+
+	Usage: <class_name>.<command>([<id>[name_arg value_arg]|[kwargs]])
+Advanced syntax is implemented for the following commands: 
+
+    * all - Shows all objects the program has access to, or all objects of a given class
+
+	* count - Return number of object instances by class
+
+    * show - Shows an object based on class and UUID
+
+	* destroy - Destroys an object based on class and UUID
+
+    * update - Updates existing attributes an object based on class name and UUID
+
+<br>
+<br>
+<center> <h2>Examples</h2> </center>
+<h3>Primary Command Syntax</h3>
+
+###### Example 0: Create an object
+Usage: create <class_name>
+```
+(hbnb) create BaseModel
+```
+```
+(hbnb) create BaseModel
+3aa5babc-efb6-4041-bfe9-3cc9727588f8
+(hbnb)                   
+```
+###### Example 1: Show an object
+Usage: show <class_name> <_id>
+
+```
+(hbnb) show BaseModel 3aa5babc-efb6-4041-bfe9-3cc9727588f8
+[BaseModel] (3aa5babc-efb6-4041-bfe9-3cc9727588f8) {'id': '3aa5babc-efb6-4041-bfe9-3cc9727588f8', 'created_at': datetime.datetime(2020, 2, 18, 14, 21, 12, 96959), 
+'updated_at': datetime.datetime(2020, 2, 18, 14, 21, 12, 96971)}
+(hbnb)  
+```
+###### Example 2: Destroy an object
+Usage: destroy <class_name> <_id>
+```
+(hbnb) destroy BaseModel 3aa5babc-efb6-4041-bfe9-3cc9727588f8
+(hbnb) show BaseModel 3aa5babc-efb6-4041-bfe9-3cc9727588f8
+** no instance found **
+(hbnb)   
+```
+###### Example 3: Update an object
+Usage: update <class_name> <_id>
+```
+(hbnb) update BaseModel b405fc64-9724-498f-b405-e4071c3d857f first_name "person"
+(hbnb) show BaseModel b405fc64-9724-498f-b405-e4071c3d857f
+[BaseModel] (b405fc64-9724-498f-b405-e4071c3d857f) {'id': 'b405fc64-9724-498f-b405-e4071c3d857f', 'created_at': datetime.datetime(2020, 2, 18, 14, 33, 45, 729889), 
+'updated_at': datetime.datetime(2020, 2, 18, 14, 33, 45, 729907), 'first_name': 'person'}
+(hbnb)
+```
+<h3>Alternative Syntax</h3>
+
+###### Example 0: Show all User objects
+Usage: <class_name>.all()
+```
+(hbnb) User.all()
+["[User] (99f45908-1d17-46d1-9dd2-b7571128115b) {'updated_at': datetime.datetime(2020, 2, 19, 21, 47, 34, 92071), 'id': '99f45908-1d17-46d1-9dd2-b7571128115b', 'created_at': datetime.datetime(2020, 2, 19, 21, 47, 34, 92056)}", "[User] (98bea5de-9cb0-4d78-8a9d-c4de03521c30) {'updated_at': datetime.datetime(2020, 2, 19, 21, 47, 29, 134362), 'id': '98bea5de-9cb0-4d78-8a9d-c4de03521c30', 'created_at': datetime.datetime(2020, 2, 19, 21, 47, 29, 134343)}"]
+```
+
+###### Example 1: Destroy a User
+Usage: <class_name>.destroy(<_id>)
+```
+(hbnb) User.destroy("99f45908-1d17-46d1-9dd2-b7571128115b")
+(hbnb)
+(hbnb) User.all()
+(hbnb) ["[User] (98bea5de-9cb0-4d78-8a9d-c4de03521c30) {'updated_at': datetime.datetime(2020, 2, 19, 21, 47, 29, 134362), 'id': '98bea5de-9cb0-4d78-8a9d-c4de03521c30', 'created_at': datetime.datetime(2020, 2, 19, 21, 47, 29, 134343)}"]
+```
+###### Example 2: Update User (by attribute)
+Usage: <class_name>.update(<_id>, <attribute_name>, <attribute_value>)
+```
+(hbnb) User.update("98bea5de-9cb0-4d78-8a9d-c4de03521c30", name "Todd the Toad")
+(hbnb)
+(hbnb) User.all()
+(hbnb) ["[User] (98bea5de-9cb0-4d78-8a9d-c4de03521c30) {'updated_at': datetime.datetime(2020, 2, 19, 21, 47, 29, 134362), 'id': '98bea5de-9cb0-4d78-8a9d-c4de03521c30', 'name': 'Todd the Toad', 'created_at': datetime.datetime(2020, 2, 19, 21, 47, 29, 134343)}"]
+```
+###### Example 3: Update User (by dictionary)
+Usage: <class_name>.update(<_id>, <dictionary>)
+```
+(hbnb) User.update("98bea5de-9cb0-4d78-8a9d-c4de03521c30", {'name': 'Fred the Frog', 'age': 9})
+(hbnb)
+(hbnb) User.all()
+(hbnb) ["[User] (98bea5de-9cb0-4d78-8a9d-c4de03521c30) {'updated_at': datetime.datetime(2020, 2, 19, 21, 47, 29, 134362), 'name': 'Fred the Frog', 'age': 9, 'id': '98bea5de-9cb0-4d78-8a9d-c4de03521c30', 'created_at': datetime.datetime(2020, 2, 19, 21, 47, 29, 134343)}"]
+```
+<br>-- Prepares the MySQL server for the project
+
+-- Create the database
+CREATE DATABASE IF NOT EXISTS hbnb_dev_db;
+
+
+-- Create a new user for the database
+CREATE USER IF NOT EXISTS 'hbnb_dev'@'localhost' IDENTIFIED BY 'hbnb_dev_pwd';
+
+
+-- Revoke all privileges for `hbnb_dev` user
+REVOKE ALL PRIVILEGES, GRANT OPTION FROM 'hbnb_dev'@'localhost';
+
+
+-- Grant `hbnb_dev` privileges in the database
+GRANT ALL PRIVILEGES ON hbnb_dev_db.* TO 'hbnb_dev'@'localhost';
+
+
+-- Grant SELECT privilege on database `performance_schema`
+GRANT SELECT ON performance_schema.* TO 'hbnb_dev'@'localhost';
+
+-- Flush privileges
+FLUSH PRIVILEGES;
+
+-- Prepares the MySQL server for the project
+
+-- Create the database
+CREATE DATABASE IF NOT EXISTS hbnb_test_db;
+
+
+-- Create a new user for the database
+CREATE USER IF NOT EXISTS 'hbnb_test'@'localhost' IDENTIFIED BY 'hbnb_test_pwd';
+
+
+-- Revoke all privileges for `hbnb_test` user
+REVOKE ALL PRIVILEGES, GRANT OPTION FROM 'hbnb_test'@'localhost';
+
+
+-- Grant `hbnb_test` privileges in the database
+GRANT ALL PRIVILEGES ON hbnb_test_db.* TO 'hbnb_test'@'localhost';
+
+
+-- Grant SELECT privilege on database `performance_schema`
+GRANT SELECT ON performance_schema.* TO 'hbnb_test'@'localhost';
+
+-- Flush privileges
+FLUSH PRIVILEGES;
+
+#!/usr/bin/python3
+""" State Module for HBNB project """
+from models.base_model import BaseModel, Base
+from sqlalchemy import Column, String
+from sqlalchemy.orm import relationship
+from models.place import place_amenity
+
+class Amenity(BaseModel, Base):
+    """Amenity Model"""
+
+    __tablename__ = "amenities"
+
+    name = Column(String(128), nullable=False)
+    place_amenities = relationship("Table", secondary=place_amenity)
+#!/usr/bin/python3
+"""This module defines a base class for all models in our hbnb clone"""
+import uuid
+from datetime import datetime
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, Integer, DateTime, String
+
+
+Base = declarative_base()
+
+class BaseModel:
+    """A base class for all hbnb models"""
+
+    id = Column(String(60), primary_key=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow())
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow())
+
+    def __init__(self, *args, **kwargs):
+        """Instatntiates a new model"""
+        if not kwargs or (
+            "updated_at" not in kwargs
+            and "created_at" not in kwargs
+            and "__class__" not in kwargs
+        ):
+            from models import storage
+
+            self.id = str(uuid.uuid4())
+            self.created_at = datetime.now()
+            self.updated_at = datetime.now()
+            self.__dict__.update(kwargs)
+            # storage.new(self)
+        else:
+            kwargs["updated_at"] = datetime.strptime(
+                kwargs["updated_at"], "%Y-%m-%dT%H:%M:%S.%f"
+            )
+            kwargs["created_at"] = datetime.strptime(
+                kwargs["created_at"], "%Y-%m-%dT%H:%M:%S.%f"
+            )
+            del kwargs["__class__"]
+            self.__dict__.update(kwargs)
+
+    def __str__(self):
+        """Returns a string representation of the instance"""
+        cls = (str(type(self)).split(".")[-1]).split("'")[0]
+        dictionary = self.__dict__
+
+        if "_sa_instance_state" in self.__dict__:
+            del dictionary["_sa_instance_state"]
+
+        return "[{}] ({}) {}".format(cls,
+                self.id,
+                dictionary)
+
+    def save(self):
+        """Updates updated_at with current time when instance is changed"""
+        from models import storage
+
+        self.updated_at = datetime.now()
+        storage.new(self)
+        storage.save()
+
+    def to_dict(self):
+        """Convert instance into dict format"""
+        dictionary = {}
+        dictionary.update(self.__dict__)
+        dictionary.update({"__class__": (str(type(self)).split(".")[-1]).split("'")[0]})
+        dictionary["created_at"] = self.created_at.isoformat()
+        dictionary["updated_at"] = self.updated_at.isoformat()
+        if "_sa_instance_state" in dictionary:
+            del dictionary["_sa_instance_state"]
+        return dictionary
+
+    def delete(self):
+        """Delete current instance from storage"""
+        storage.delete(self)
+#!/usr/bin/python3
+""" City Module for HBNB project """
+
+from models.base_model import BaseModel, Base
+from sqlalchemy import String, ForeignKey, Column
+from sqlalchemy.orm import relationship
+
+
+
+class City(BaseModel, Base):
+    """The city class, contains state ID and name"""
+
+    __tablename__ = "cities"
+    state_id = Column(String(60), ForeignKey('states.id'), nullable=False)
+    name = Column(String(128), nullable=False)
+    places = relationship("Place", backref="cities")
+
+#!/usr/bin/python3
+"""This module instantiates an object of class FileStorage"""
+from models.engine.file_storage import FileStorage
+import os
+
+
+if os.getenv("HBNB_TYPE_STORAGE") == 'db':
+    from models.engine.db_storage import DBStorage
+
+    storage = DBStorage()
+else:
+    storage = FileStorage()
+
+
+storage.reload()
+#!/usr/bin/python3
+""" Place Module for HBNB project """
+import os
+from models.base_model import BaseModel, Base
+from sqlalchemy import Column, String, ForeignKey, Integer, Float, Table
+from sqlalchemy.orm import relationship
+
+
+
+metadata = Base.metadata
+place_amenity = Table("place_amenity", metadata,
+        Column("place_id", String(60), ForeignKey("places.id"), primary_key=True, nullable=False),
+        Column("amenity_id", String(60), ForeignKey("amenities.id"), primary_key=True, nullable=False)
+)
+
+
+
+class Place(BaseModel, Base):
+    """A place to stay"""
+
+    __tablename__ = "places"
+
+    city_id = Column(String(60), ForeignKey("cities.id"), nullable=False)
+    user_id = Column(String(60), ForeignKey("users.id"), nullable=False)
+    name = Column(String(128), nullable=False)
+    description = Column(String(1024), nullable=True)
+    number_rooms = Column(Integer, nullable=False, default=int(0))
+    number_bathrooms = Column(Integer, nullable=False, default=0)
+    max_guest = Column(Integer, nullable=False, default=0)
+    price_by_night = Column(Integer, nullable=False, default=0)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    amenity_ids = []
+
+    if os.getenv("HBNB_TYPE_STORAGE") == "db":
+        "If database is connected"
+        reviews = relationship("Review", backref="place")
+        amenities = relationship("Amenity", secondary=place_amenity, viewonly=False)
+    else:
+        from models import storage
+
+        @property
+        def reviews(self):
+
+            all_objects = storage.__FileStorage__objects
+
+            reviews = []
+            for k, v in all_objects:
+
+                if (
+                    v.to_dict()["__class__"] == "Review"
+                    and self.id == v.to_dict()["place_id"]
+                ):
+                    reviews.append(v)
+            return reviews
+
+        @property
+        def amenities(self):
+
+            all_objects = storage.__FileStorage__objects
+
+            for a_id in amenity_ids:
+                for k, v in all_objects:
+                    if a_id == v.to_dict()['id']:
+                        amenities.append(v)
+                        break
+
+        @amenities.setter
+        def amenities(self, value):
+
+            if value.to_dict()['__class__'] == "Amenity":
+                amenity_ids.append(value.to_dict()['id'])
+
+#!/usr/bin/python3
+""" Review module for the HBNB project """
+from models.base_model import BaseModel, Base
+from sqlalchemy import Column, String, ForeignKey
+from sqlalchemy.orm import relationship
+
+
+class Review(BaseModel, Base):
+    """Review classto store review information"""
+
+    __tablename__ = "reviews"
+    place_id = Column(String(60), ForeignKey("places.id"), nullable=False)
+    user_id = Column(String(60), ForeignKey("users.id"), nullable=False)
+    text = Column(String(1024), nullable=False)
+#!/usr/bin/python3
+""" State Module for HBNB project """
+from models.base_model import BaseModel, Base
+from sqlalchemy import Column, String
+
+class State(BaseModel, Base):
+    """State class"""
+
+    __tablename__ = "states"
+    name = Column(String(128), nullable=False)
+#!/usr/bin/python3
+"""This module defines a class User"""
+from models.base_model import BaseModel, Base
+from sqlalchemy import Column, String
+from sqlalchemy.orm import relationship
+
+
+class User(BaseModel, Base):
+    """This class defines a user by various attributes"""
+
+    __tablename__ = "users"
+
+    email = Column(String(128), nullable=False)
+    password = Column(String(128), nullable=False)
+    first_name = Column(String(128), nullable=True)
+    last_name = Column(String(128), nullable=True)
+    places = relationship("Place", backref="user")
+    reviews = relationship("Review", backref="user")
+#!/usr/bin/python3
+
+"""New engine for the databas"""
+import os
+from models.base_model import Base, BaseModel
+from models.user import User
+from models.state import State
+from models.city import City
+from models.amenity import Amenity
+from models.place import Place
+from models.review import Review
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+class DBStorage:
+
+    """New database engine for our Hbnb Project
+    to connect to Mysql
+    """
+
+    __engine = None
+    __session = None
+
+    def __init__(self):
+        """Initialize the database"""
+        from urllib.parse import quote_plus
+
+        # get the system environmen variables
+
+        usr = os.getenv("HBNB_MYSQL_USER")
+        passwd = quote_plus(os.getenv("HBNB_MYSQL_PWD"))
+        host = os.getenv("HBNB_MYSQL_HOST")
+        db = os.getenv("HBNB_MYSQL_DB")
+        env = os.getenv("HBNB_ENV")
+
+        # connect to the database engine
+        uri = f"mysql+mysqldb://{usr}:{passwd}@{host}:3306/{db}"
+
+
+        self.__engine = create_engine(uri, pool_pre_ping=True)
+        
+        # delete the test.* if env is "test"
+
+        if env == "test":
+            Base.metadata.drop_all(engine)
+
+
+    def all(self, cls=None):
+        """
+        Queries the current database"""
+
+        table_names = [
+                "User",
+                "State",
+                "City",
+                "Amenity",
+                "Place",
+                "Review"
+        ]
+
+        classes = {
+                "User": User,
+                "State": State,
+                "City": City,
+                "Amenity": Amenity,
+                "Place": Place,
+                "Review": Review
+        }
+
+        dictionary = {}
+        if cls is None:
+            
+            # query the database tables
+            for name in table_names:
+                result = self.__session.query(classes[name]).all()
+
+                # loop through the objects and store in our local dict
+                for obj in result:
+                    key = obj.to_dict()['__class__'] + "." + obj.id
+                    dictionary[key] = obj
+        else:
+            result = self.__session.query(classes[cls]).all()
+
+            for obj in result:
+                key = obj.to_dict()['__class__'] + '.' + obj.id
+                dictionary[key] = obj
+
+        return dictionary
+
+
+    def new(self, obj):
+        """Adds a new object to the current database session"""
+
+        self.__session.add(obj)
+
+
+    def save(self):
+        """Commits all changes of the current database session"""
+        self.__session.commit()
+
+
+    def delete(self, obj=None):
+        """Deletes from a current database session"""
+        if obj:
+            self.__session.delete(obj)
+            # self.__session.commit()
+
+    def reload(self):
+        """Creates all tables in the database"""
+
+        Base.metadata.create_all(self.__engine)
+        Session = sessionmaker(bind=self.__engine, expire_on_commit=False)
+        self.__session = Session()
+
+#!/usr/bin/python3
+"""This module defines a class to manage file storage for hbnb clone"""
+import json
+
+
+class FileStorage:
+    """This class manages storage of hbnb models in JSON format"""
+
+    __file_path = "file.json"
+    __objects = {}
+
+    def all(self, cls=None):
+        """Returns a dictionary of models currently in storage"""
+        if cls is None:
+            return FileStorage.__objects
+        else:
+            return {
+                key: obj
+                for key, obj in FileStorage.__objects.items()
+                if isinstance(obj, cls)
+            }
+
+    def new(self, obj):
+        """Adds new object to storage dictionary"""
+        self.all().update({obj.to_dict()["__class__"] + "." + obj.id: obj})
+
+    def save(self):
+        """Saves storage dictionary to file"""
+        with open(FileStorage.__file_path, "w") as f:
+            temp = {}
+            temp.update(FileStorage.__objects)
+            for key, val in temp.items():
+                temp[key] = val.to_dict()
+            json.dump(temp, f)
+
+    def reload(self):
+        """Loads storage dictionary from file"""
+        from models.base_model import BaseModel
+        from models.user import User
+        from models.place import Place
+        from models.state import State
+        from models.city import City
+        from models.amenity import Amenity
+        from models.review import Review
+
+        classes = {
+            "BaseModel": BaseModel,
+            "User": User,
+            "Place": Place,
+            "State": State,
+            "City": City,
+            "Amenity": Amenity,
+            "Review": Review,
+        }
+        try:
+            temp = {}
+            with open(FileStorage.__file_path, "r") as f:
+                temp = json.load(f)
+                for key, val in temp.items():
+                    self.all()[key] = classes[val["__class__"]](**val)
+        except FileNotFoundError:
+            pass
+
+    def delete(self, obj=None):
+        """Deletes an obj from __objects if in __objects"""
+
+        if obj is not None:
+            key = obj.__class__.__name__ + "." + obj.id
+            if key in FileStorage.__objects:
+                del FileStorage.__objects[key]

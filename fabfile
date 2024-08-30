@@ -1,0 +1,29 @@
+#!/usr/bin/python3
+
+"""
+Creates an archive using tar
+"""
+
+from fabric.api import local
+from datetime import datetime
+import os
+
+def do_pack():
+
+    """Grenerates a .tgz archive of web_static"""
+
+    if not os.path.exists("versions"):
+        os.makedirs("versions")
+
+
+    current_time = datettime.now().strftime("%Y%m%d%H%M%S")
+    archive_name = f"versions/web_static_{current_time}.tgz"
+
+    command = f"tar -czvf {archive_name} web_static"
+    result = local(command)
+
+    if result.succeeded:
+        return archive_name
+    else:
+        return None
+

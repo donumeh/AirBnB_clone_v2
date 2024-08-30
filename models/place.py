@@ -2,8 +2,17 @@
 """ Place Module for HBNB project """
 import os
 from models.base_model import BaseModel, Base
-from sqlalchemy import Column, String, ForeignKey, Integer, Float
+from sqlalchemy import Column, String, ForeignKey, Integer, Float, Table
 from sqlalchemy.orm import relationship
+
+
+
+metadata = Base.metadata
+place_amenity = Table("place_amenity", metadata,
+        Column("place_id", String(60), ForeignKey("places.id"), primary_key=True, nullable=False),
+        Column("amenity_id", String(60), ForeignKey("amenities.id"), primary_key=True, nullable=False)
+)
+
 
 
 class Place(BaseModel, Base):
@@ -24,18 +33,19 @@ class Place(BaseModel, Base):
     amenity_ids = []
 
     if os.getenv("HBNB_TYPE_STORAGE") == "db":
+        "If database is connected"
         reviews = relationship("Review", backref="place")
+        amenities = relationship("Amenity", secondary=place_amenity, viewonly=False)
     else:
+        from models import storage
 
         @property
         def reviews(self):
-            from models import storage
-            from models.review import Review
 
-            all_objects = storage.__FileStorage__objects
+            all_objects = storage.all(Review)
 
+            reviews = []
             for k, v in all_objects:
-                reviews = []
 
                 if (
                     v.to_dict()["__class__"] == "Review"
@@ -43,3 +53,21 @@ class Place(BaseModel, Base):
                 ):
                     reviews.append(v)
             return reviews
+
+        @property
+        def amenities(self):
+
+            all_objects = storage.all(Amenity)
+
+            for a_id in amenity_ids:
+                for k, v in all_objects:
+                    if a_id == v.to_dict()['id']:
+                        amenities.append(v)
+                        break
+
+        @amenities.setter
+        def amenities(self, value):
+
+            if isinstance(value, Amenity):
+                amenity_ids.append(value.to_dict()['id'])
+
